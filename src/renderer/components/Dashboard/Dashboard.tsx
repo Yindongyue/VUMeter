@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import GridLayout, { WidthProvider } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
-import VUMeter from '../VUMeter/VUMeter'
+import VUMeterLeft from '../VUMeter/VUMeterLeft'
+import VUMeterRight from '../VUMeter/VUMeterRight'
 import LEDArray from '../LEDArray/LEDArray'
 import Waveform from '../Waveform/Waveform'
 import { useLayoutStore } from '../../store/useLayoutStore'
@@ -11,7 +12,8 @@ import { LayoutItem } from '../../types/layout'
 const ResponsiveGridLayout = WidthProvider(GridLayout)
 
 const componentMap: Record<string, React.FC> = {
-  'vu-meter': VUMeter,
+  'vu-meter-left': VUMeterLeft,
+  'vu-meter-right': VUMeterRight,
   'led-array': LEDArray,
   'waveform': Waveform
 }
@@ -23,11 +25,9 @@ const Dashboard: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(1200)
 
-  // Track container width with ResizeObserver for real-time responsiveness
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
         const w = entry.contentRect.width
@@ -39,7 +39,8 @@ const Dashboard: React.FC = () => {
   }, [])
 
   const componentLabels: Record<string, string> = {
-    'vu-meter': t('panel.vumeter'),
+    'vu-meter-left': t('panel.vumeterLeft'),
+    'vu-meter-right': t('panel.vumeterRight'),
     'led-array': t('panel.led'),
     'waveform': t('panel.waveform')
   }
@@ -55,7 +56,6 @@ const Dashboard: React.FC = () => {
     setLayout(items)
   }, [setLayout])
 
-  // Use container width minus padding, with a fallback
   const gridWidth = containerWidth > 0 ? containerWidth - 16 : 1200
 
   return (
@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
         width={gridWidth}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
-        compactType="vertical"
+        // REMOVED: compactType — it snaps panels back, blocking drag/resize
         isResizable={true}
         isDraggable={true}
         margin={[8, 8]}
@@ -84,37 +84,43 @@ const Dashboard: React.FC = () => {
           if (!Component) return null
 
           return (
-            <div key={item.i} style={{
-              background: 'rgba(255,255,255,0.03)',
-              borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.08)',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
+            <div key={item.i} className="panel-wrapper">
+              {/* Header bar — drag handle */}
               <div
                 className="drag-handle"
                 style={{
-                  padding: '4px 10px',
-                  fontSize: 11,
+                  padding: '4px 12px',
+                  fontSize: 10,
                   fontWeight: 600,
-                  color: 'rgba(255,255,255,0.4)',
+                  color: 'oklch(1 0 0 / 0.55)',
                   textTransform: 'uppercase',
-                  letterSpacing: 1,
+                  letterSpacing: 0.5,
                   cursor: 'grab',
                   userSelect: 'none',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  background: 'rgba(255,255,255,0.02)',
+                  borderBottom: '1px solid oklch(1 0 0 / 0.06)',
+                  background: 'oklch(1 0 0 / 0.02)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  flexShrink: 0
+                  flexShrink: 0,
+                  minHeight: 28,
+                  zIndex: 1
                 }}
               >
                 <span>{label}</span>
-                <span style={{ fontSize: 10, opacity: 0.5 }}>⋮⋮</span>
+                <span style={{ fontSize: 9, opacity: 0.5 }} aria-hidden="true">⋮⋮</span>
               </div>
-              <div style={{ flex: 1, minHeight: 0 }}>
+
+              {/* Canvas content — fills remaining space */}
+              <div style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                background: 'oklch(1 0 0 / 0.03)',
+                borderRadius: '0 0 8px 8px',
+                border: '1px solid oklch(1 0 0 / 0.08)',
+                borderTop: 'none'
+              }}>
                 <Component />
               </div>
             </div>

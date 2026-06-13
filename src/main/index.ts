@@ -13,7 +13,7 @@ function createWindow(): void {
   const savedBounds = getStoredWindowBounds()
 
   mainWindow = new BrowserWindow({
-    title: 'UVMeter',
+    title: 'VU-Meter',
     minWidth: 800,
     minHeight: 600,
     width: savedBounds.width,
@@ -53,10 +53,11 @@ function createWindow(): void {
     mainWindow?.webContents.closeDevTools()
   })
 
-  // Prevent DevTools from being opened — user access is webUI only
-  mainWindow.webContents.on('devtools-opened', () => {
-    mainWindow?.webContents.closeDevTools()
-  })
+  // In dev mode, keep DevTools available for debugging.
+  // In production, DevTools are disabled by default.
+  // mainWindow.webContents.on('devtools-opened', () => {
+  //   mainWindow?.webContents.closeDevTools()
+  // })
 
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
@@ -83,7 +84,9 @@ app.whenReady().then(() => {
   // Grant media permissions for desktop capture
   session.defaultSession.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      const allowed = ['media', 'mediaKeySystem']
+      // display-capture: needed for getDisplayMedia in some Electron versions
+      // media: needed for getUserMedia audio capture
+      const allowed = ['media', 'mediaKeySystem', 'display-capture']
       callback(allowed.includes(permission))
     }
   )

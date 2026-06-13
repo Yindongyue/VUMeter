@@ -11,7 +11,7 @@ interface PersistedData {
 }
 
 const configDir = join(app.getPath('userData'), 'config')
-const configPath = join(configDir, 'uvmeter-config.json')
+const configPath = join(configDir, 'vu-meter-config.json')
 
 const defaults: PersistedData = {
   windowBounds: { width: 1200, height: 800 },

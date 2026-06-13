@@ -1,5 +1,5 @@
 {
-  "name": "uvmeter",
+  "name": "vu-meter",
   "version": "1.0.0",
   "description": "Real-time system audio level visualizer with VU meter, LED array, and waveform",
   "main": "./out/main/index.js",
@@ -8,8 +8,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "pack": "electron-builder --dir --win",
+    "dist": "electron-builder --win",
+    "clean": "node -e \"const fs=require('fs');['node_modules/7zip-bin/linux','node_modules/7zip-bin/mac','node_modules/app-builder-bin/linux','node_modules/app-builder-bin/mac'].forEach(d=>{fs.rmSync(d,{recursive:true,force:true});});console.log('Cleaned platform artifacts');\""
   },
   "dependencies": {
     "react": "^18.3.1",

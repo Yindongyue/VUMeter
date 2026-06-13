@@ -9,6 +9,9 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
-    plugins: [react()]
+    plugins: [react()],
+    define: {
+      'process.env': process.env || {},
+    },
   }
 })

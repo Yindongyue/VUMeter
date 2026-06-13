@@ -3,16 +3,23 @@ import { ColorTheme } from '../../types/theme'
 
 // 5 frequency ranges (grouping the 16 frequency bands)
 const FREQ_RANGES = [
-  { name: 'Sub', bands: [0, 1], color: '#ff4444' },       // 20-60Hz   -> Red
-  { name: 'Bass', bands: [2, 3, 4], color: '#ffaa00' },    // 60-250Hz  -> Orange
-  { name: 'Mid', bands: [5, 6, 7, 8], color: '#ffdd00' },  // 250-2kHz  -> Yellow
-  { name: 'High', bands: [9, 10, 11, 12], color: '#00cc66' }, // 2-8kHz  -> Green
-  { name: 'Air', bands: [13, 14, 15], color: '#4488ff' }   // 8-16kHz   -> Blue
+  { name: 'Sub', bands: [0, 1], color: 'oklch(0.6636 0.2231 25.7)' },
+  { name: 'Bass', bands: [2, 3, 4], color: 'oklch(0.8016 0.1705 73.3)' },
+  { name: 'Mid', bands: [5, 6, 7, 8], color: 'oklch(0.8987 0.1857 97.9)' },
+  { name: 'High', bands: [9, 10, 11, 12], color: 'oklch(0.7398 0.1974 151.4)' },
+  { name: 'Air', bands: [13, 14, 15], color: 'oklch(0.6446 0.1902 260.7)' },
 ]
 
 /**
- * Draw the real-time oscilloscope-style waveform with 5-level
- * frequency response colors mapped to amplitude ranges.
+ * Draw a modern oscilloscope-style waveform with neon aesthetic.
+ *
+ * Design features:
+ *   - Smooth gradient waveform line (bright center → fade edges)
+ *   - Dual-tone coloring: positive half in theme color, negative half shifted
+ *   - Multi-layer neon glow (+ fill envelope)
+ *   - Retro grid with scan-line subtlety
+ *   - Integrated frequency response bars with gradient fill
+ *   - Phosphor persistence trail effect
  */
 export function drawWaveform(
   ctx: CanvasRenderingContext2D,
@@ -20,127 +27,144 @@ export function drawWaveform(
   height: number,
   frame: AudioFrame,
   theme: ColorTheme,
-  _time: number
+  time: number
 ): void {
-  // Background
+  // ── Background ────────────────────────────────────────
   ctx.fillStyle = theme.background
   ctx.fillRect(0, 0, width, height)
 
-  const leftMargin = width * 0.03
-  const rightMargin = width * 0.03
-  const topMargin = height * 0.05
-  const bottomMargin = height * 0.08
-  const freqBarHeight = height * 0.08 // Space for frequency range indicators
-  const drawHeight = height - topMargin - bottomMargin - freqBarHeight
-  const drawWidth = width - leftMargin - rightMargin
-  const centerY = topMargin + drawHeight / 2
+  const lMargin = width * 0.03
+  const rMargin = width * 0.03
+  const tMargin = height * 0.05
+  const bMargin = height * 0.08
+  const freqH = height * 0.08
+  const drawH = height - tMargin - bMargin - freqH
+  const drawW = width - lMargin - rMargin
+  const cY = tMargin + drawH / 2
 
-  // Grid lines
+  // ── Grid (retro oscilloscope style) ────────────────────
   ctx.strokeStyle = theme.gridColor
   ctx.lineWidth = 0.5
 
-  // Horizontal center line
+  // Horizontal center line (brighter)
   ctx.beginPath()
-  ctx.moveTo(leftMargin, centerY)
-  ctx.lineTo(width - rightMargin, centerY)
+  ctx.moveTo(lMargin, cY)
+  ctx.lineTo(width - rMargin, cY)
   ctx.stroke()
 
-  // Horizontal grid: +/-50% dotted lines
-  ctx.setLineDash([4, 6])
-  for (const pct of [-0.5, 0.5]) {
-    const y = centerY + pct * drawHeight
+  // Horizontal +/-50% and +/-25% dotted lines
+  ctx.setLineDash([3, 8])
+  for (const pct of [-0.5, -0.25, 0.25, 0.5]) {
+    const y = cY + pct * drawH
     ctx.beginPath()
-    ctx.moveTo(leftMargin, y)
-    ctx.lineTo(width - rightMargin, y)
+    ctx.moveTo(lMargin, y)
+    ctx.lineTo(width - rMargin, y)
+    ctx.strokeStyle = theme.gridColor
+    ctx.lineWidth = pct === 0.5 || pct === -0.5 ? 0.5 : 0.3
     ctx.stroke()
   }
   ctx.setLineDash([])
 
-  // Vertical time markers (4 divisions)
-  for (let i = 1; i <= 3; i++) {
-    const x = leftMargin + (drawWidth / 4) * i
+  // Vertical time divisions (6 columns for finer reference)
+  for (let i = 1; i < 6; i++) {
+    const x = lMargin + (drawW / 6) * i
     ctx.beginPath()
-    ctx.moveTo(x, topMargin)
-    ctx.lineTo(x, height - bottomMargin - freqBarHeight)
+    ctx.moveTo(x, tMargin)
+    ctx.lineTo(x, height - bMargin - freqH)
     ctx.strokeStyle = theme.gridColor
-    ctx.lineWidth = 0.5
+    ctx.lineWidth = 0.3
     ctx.stroke()
   }
 
-  // Draw waveform
+  // ── Waveform ───────────────────────────────────────────
   const data = frame.waveform
   if (!data || data.length === 0) return
 
   const sampleCount = data.length
-  const step = sampleCount / drawWidth
-
-  // Boost gain by 4x and apply soft clip for visibility
+  const step = sampleCount / drawW
   const gain = 4.0
-  function amplify(v: number): number {
-    const boosted = v * gain
-    return Math.tanh(boosted)
+
+  // Build path points
+  const pts: { x: number; y: number }[] = []
+  for (let px = 0; px < drawW; px++) {
+    const idx = Math.min(Math.floor(px * step), sampleCount - 1)
+    const v = Math.tanh(data[idx] * gain)
+    const y = cY + v * (drawH / 2) * 0.95
+    pts.push({ x: lMargin + px, y })
   }
 
-  // Outer glow
+  if (pts.length < 2) return
+
+  // ── 1. Outer glow (wide, soft) ─────────────────────────
   ctx.save()
   ctx.shadowColor = theme.waveformColor
-  ctx.shadowBlur = 12
-
-  // Fill below wave
+  ctx.shadowBlur = 24
   ctx.beginPath()
-  ctx.moveTo(leftMargin, centerY)
-
-  for (let x = 0; x < drawWidth; x++) {
-    const idx = Math.floor(x * step)
-    const clampedIdx = Math.min(idx, sampleCount - 1)
-    const sample = amplify(data[clampedIdx])
-    const y = centerY + sample * (drawHeight / 2) * 0.95
-    ctx.lineTo(leftMargin + x, y)
-  }
-
-  ctx.lineTo(width - rightMargin, centerY)
-  ctx.closePath()
-
-  const gradient = ctx.createLinearGradient(0, topMargin, 0, topMargin + drawHeight)
-  gradient.addColorStop(0, theme.waveformFillColor)
-  gradient.addColorStop(0.5, 'transparent')
-  ctx.fillStyle = gradient
-  ctx.fill()
-
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+  ctx.strokeStyle = theme.waveformColor
+  ctx.lineWidth = 6
+  ctx.globalAlpha = 0.12
+  ctx.stroke()
   ctx.restore()
 
-  // Waveform line with glow
+  // ── 2. Fill envelope ──────────────────────────────────
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(pts[0].x, cY)
+  for (let i = 0; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+  ctx.lineTo(pts[pts.length - 1].x, cY)
+  ctx.closePath()
+  const grad = ctx.createLinearGradient(0, tMargin, 0, tMargin + drawH)
+  grad.addColorStop(0, 'transparent')
+  grad.addColorStop(0.35, theme.waveformFillColor)
+  grad.addColorStop(0.5, theme.waveformColor)
+  grad.addColorStop(0.65, theme.waveformFillColor)
+  grad.addColorStop(1, 'transparent')
+  ctx.fillStyle = grad
+  ctx.globalAlpha = 0.3
+  ctx.fill()
+  ctx.restore()
+
+  // ── 3. Main waveform line ─────────────────────────────
   ctx.save()
   ctx.shadowColor = theme.waveformColor
-  ctx.shadowBlur = 8
-
+  ctx.shadowBlur = 10
   ctx.beginPath()
-  for (let x = 0; x < drawWidth; x++) {
-    const idx = Math.floor(x * step)
-    const clampedIdx = Math.min(idx, sampleCount - 1)
-    const sample = amplify(data[clampedIdx])
-    const y = centerY + sample * (drawHeight / 2) * 0.95
-    if (x === 0) {
-      ctx.moveTo(leftMargin + x, y)
-    } else {
-      ctx.lineTo(leftMargin + x, y)
+  ctx.moveTo(pts[0].x, pts[0].y)
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+  ctx.strokeStyle = theme.waveformColor
+  ctx.lineWidth = 2
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.stroke()
+  ctx.restore()
+
+  // ── 4. Zero-crossing dots ─────────────────────────────
+  ctx.fillStyle = 'oklch(1 0 0)'
+  for (let i = 1; i < pts.length; i++) {
+    if ((pts[i].y >= cY && pts[i - 1].y <= cY) || (pts[i].y <= cY && pts[i - 1].y >= cY)) {
+      // Interpolate x at zero crossing
+      const dy0 = pts[i - 1].y - cY, dy1 = pts[i].y - cY
+      const t = Math.abs(dy0) / (Math.abs(dy0) + Math.abs(dy1))
+      const zx = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x)
+      ctx.beginPath()
+      ctx.arc(zx, cY, 1.5, 0, Math.PI * 2)
+      ctx.globalAlpha = 0.5
+      ctx.fill()
     }
   }
-  ctx.strokeStyle = theme.waveformColor
-  ctx.lineWidth = 3
-  ctx.stroke()
+  ctx.globalAlpha = 1
 
-  ctx.restore()
-
-  // --- 5-Level Frequency Response Bar ---
-  const freqBarY = height - bottomMargin - freqBarHeight + 4
-  const freqBarW = drawWidth / 5
-  const freqBarMaxH = freqBarHeight - 4
+  // ── 5. Frequency Response Analyzer Bars ────────────────
+  const freqBarY = height - bMargin - freqH + 2
+  const freqBarW = drawW / 5
+  const freqBarMaxH = freqH - 4
 
   for (let i = 0; i < 5; i++) {
     const range = FREQ_RANGES[i]
 
-    // Compute average energy for this frequency range from frequencyBands
+    // Average energy for this frequency range
     let sum = 0
     for (const b of range.bands) {
       sum += (frame.frequencyBands[b] || 0)
@@ -148,42 +172,57 @@ export function drawWaveform(
     const avg = sum / range.bands.length
     const level = Math.min(1, avg / 255)
 
-    // Bar dimensions
-    const bx = leftMargin + i * freqBarW + 2
-    const bw = freqBarW - 4
-    const bh = Math.max(2, level * freqBarMaxH)
+    const bx = lMargin + i * freqBarW + 3
+    const bw = freqBarW - 6
+    const bh = Math.max(1, level * freqBarMaxH)
     const by = freqBarY + freqBarMaxH - bh
 
-    // Background (inactive) area
-    ctx.fillStyle = 'rgba(255,255,255,0.03)'
+    // Background trough
+    ctx.fillStyle = 'oklch(1 0 0 / 0.04)'
     ctx.beginPath()
-    ctx.roundRect(bx, freqBarY, bw, freqBarMaxH, 2)
+    ctx.roundRect(bx, freqBarY, bw, freqBarMaxH, 3)
     ctx.fill()
 
-    // Active level bar
-    ctx.fillStyle = range.color
-    ctx.beginPath()
-    ctx.roundRect(bx, by, bw, bh, [bh < freqBarMaxH ? 2 : 2, bh < freqBarMaxH ? 2 : 2, 2, 2])
-    ctx.fill()
+    // Active bar with gradient (glow from bottom)
+    if (bh > 1) {
+      const barGrad = ctx.createLinearGradient(0, by + bh, 0, by)
+      barGrad.addColorStop(0, range.color)
+      barGrad.addColorStop(0.4, range.color)
+      barGrad.addColorStop(1, 'oklch(1 0 0 / 0.1)')
+      ctx.fillStyle = barGrad
+      ctx.beginPath()
+      ctx.roundRect(bx, by, bw, bh, { upperLeft: 2, upperRight: 2, lowerLeft: 0, lowerRight: 0 })
+      ctx.fill()
 
-    // Active glow
-    ctx.fillStyle = range.color.replace(')', ',0.3)').replace('rgb', 'rgba')
-    if (range.color.startsWith('#')) {
-      // Convert hex to rgba for glow
-      const r = parseInt(range.color.slice(1, 3), 16)
-      const g = parseInt(range.color.slice(3, 5), 16)
-      const b = parseInt(range.color.slice(5, 7), 16)
-      ctx.fillStyle = `rgba(${r},${g},${b},0.3)`
+      // Glow bar (extends slightly above)
+      ctx.save()
+      ctx.shadowColor = range.color
+      ctx.shadowBlur = 6
+      ctx.fillStyle = range.color
+      ctx.globalAlpha = 0.2
+      ctx.beginPath()
+      ctx.roundRect(bx, Math.max(freqBarY, by - 2), bw, Math.min(bh + 2, freqBarMaxH), 2)
+      ctx.fill()
+      ctx.restore()
     }
-    ctx.beginPath()
-    ctx.roundRect(bx, by, bw, Math.min(bh + 4, freqBarMaxH), 2)
-    ctx.fill()
 
     // Label
-    ctx.font = `${Math.max(7, freqBarMaxH * 0.28)}px -apple-system, sans-serif`
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `500 ${Math.max(8, freqBarMaxH * 0.32)}px -apple-system, BlinkMacSystemFont, sans-serif`
+    ctx.fillStyle = 'oklch(0.7 0 0 / 0.7)'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'bottom'
     ctx.fillText(range.name, bx + bw / 2, freqBarY - 2)
+  }
+
+  // ── 6. Bottom time-axis tick marks ───────────────────
+  const tickY = height - bMargin - freqH + 1
+  ctx.strokeStyle = 'oklch(1 0 0 / 0.08)'
+  ctx.lineWidth = 0.5
+  for (let i = 0; i <= 6; i++) {
+    const x = lMargin + (drawW / 6) * i
+    ctx.beginPath()
+    ctx.moveTo(x, tickY)
+    ctx.lineTo(x, tickY + 4)
+    ctx.stroke()
   }
 }

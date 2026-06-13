@@ -6,7 +6,9 @@ const SEGMENTS_PER_BAR = 10
 
 /**
  * Draw the LED array bar graph with individual LED segments
- * at a 1:3 width-to-height aspect ratio (tall narrow rectangles).
+ * at a 3:1 landscape (width:height) aspect ratio.
+ *
+ * All colors use OKLCH per Rule 2.
  */
 export function drawLEDArray(
   ctx: CanvasRenderingContext2D,
@@ -22,8 +24,8 @@ export function drawLEDArray(
 
   const leftMargin = width * 0.06
   const rightMargin = width * 0.06
-  const topMargin = height * 0.05
-  const bottomMargin = height * 0.05
+  const topMargin = height * 0.06
+  const bottomMargin = height * 0.06
   const barAreaWidth = width - leftMargin - rightMargin
   const barAreaHeight = height - topMargin - bottomMargin
 
@@ -32,10 +34,10 @@ export function drawLEDArray(
   const barW = barWidth * (1 - gapRatio)
   const gap = barWidth * gapRatio
 
-  // LED aspect ratio 1:3 (width:height) — each LED is a tall narrow rectangle
+  // LED aspect ratio 3:1 landscape (width:height) — each LED is a wide horizontal bar
   const segW = barW
-  const segH = segW * 3
-  const segGap = segW * 0.3
+  const segH = segW / 3
+  const segGap = segH * 0.4
 
   // Total height of one bar
   const totalBarHeight = SEGMENTS_PER_BAR * segH + (SEGMENTS_PER_BAR - 1) * segGap
@@ -68,23 +70,23 @@ export function drawLEDArray(
           // Peak segment: flash if this is the top-most lit segment
           if (seg === litSegments - 1 && litSegments > SEGMENTS_PER_BAR * 0.75) {
             const flash = Math.sin(time / 1000 * 8 * Math.PI) > 0
-            ctx.fillStyle = flash ? '#ffffff' : theme.ledBarRedColor
+            ctx.fillStyle = flash ? 'oklch(1 0 0)' : theme.ledBarRedColor
           } else {
             ctx.fillStyle = theme.ledBarRedColor
           }
         }
       }
 
-      // Draw narrow rectangular LED segment with rounded corners
-      const rx = segW * 0.2
-      const ry = segW * 0.2
+      // Draw landscape rectangular LED segment with rounded corners
+      const rx = segH * 0.3
+      const ry = segH * 0.3
       ctx.beginPath()
       ctx.roundRect(x, segY, segW, segH, [rx, rx, ry, ry])
       ctx.fill()
     }
   }
 
-  // Frequency labels
+  // Frequency labels — Rule 5: base 12px, Rule 7: contrast via theme.textColor
   const freqLabels = ['20', '60', '100', '150', '250', '400', '600', '800', '1.2k', '2k', '3k', '5k', '7k', '10k', '13k', '16k']
   ctx.font = `${Math.max(8, barWidth * 0.22)}px -apple-system, sans-serif`
   ctx.fillStyle = theme.textColor

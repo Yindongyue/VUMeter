@@ -46,29 +46,31 @@ export function computePeak(data: Uint8Array): number {
 
 /**
  * Apply VU meter ballistics with attack/release smoothing.
- * Maps dBFS to VU scale (-20 to +3 dB).
+ * Operates on dBFS values, then clamps output to VU scale.
  *
  * @param currentLevel - Current RMS in dBFS
  * @param previousLevel - Previous VU level from last frame
  * @param dt - Delta time in seconds
- * @returns Smoothed VU level
+ * @returns Smoothed VU level (clamped to -20…+3)
  */
 export function applyVUBallistics(
   currentLevel: number,
   previousLevel: number,
   dt: number
 ): number {
-  // Map dBFS to VU scale: 0 dBFS ≈ 0 VU, with slight offset
-  const vuInput = Math.max(-20, Math.min(3, currentLevel + 0))
-
+  // Apply ballistics on raw dBFS, then clamp to VU scale
   const alphaAttack = 1 - Math.exp(-dt / VU_ATTACK)
   const alphaRelease = 1 - Math.exp(-dt / VU_RELEASE)
 
-  if (vuInput > previousLevel) {
-    return previousLevel + (vuInput - previousLevel) * alphaAttack
+  let result: number
+  if (currentLevel > previousLevel) {
+    result = previousLevel + (currentLevel - previousLevel) * alphaAttack
   } else {
-    return previousLevel + (vuInput - previousLevel) * alphaRelease
+    result = previousLevel + (currentLevel - previousLevel) * alphaRelease
   }
+
+  // Clamp output to VU scale
+  return Math.max(-20, Math.min(3, result))
 }
 
 /**
@@ -122,6 +124,7 @@ export function computeFrequencyBands(
 
 /**
  * Update peak hold value with decay.
+ * Operates on VU-scaled values (-20 to +3 dB).
  */
 export function updatePeakHold(
   currentPeak: number,
@@ -129,8 +132,11 @@ export function updatePeakHold(
   dt: number,
   peakHoldTime: number
 ): { value: number; holdTime: number } {
-  if (currentPeak > previousPeakHold) {
-    return { value: currentPeak, holdTime: 0 }
+  // Clamp input to VU scale
+  const vuPeak = Math.max(-20, Math.min(3, currentPeak))
+
+  if (vuPeak > previousPeakHold) {
+    return { value: vuPeak, holdTime: 0 }
   }
 
   const newHoldTime = peakHoldTime + dt * 1000
